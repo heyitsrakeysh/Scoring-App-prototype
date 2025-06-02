@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PB & NI Submission Scoring System - Enhanced</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @media print {
+            body { 
+                font-size: 11px; 
+                margin: 0; 
+                padding: 0;
+            }
+            .no-print { display: none; }
+            .print-break { page-break-before: avoid; }
+            * { -webkit-print-color-adjust: exact; color-adjust: exact; }
+        }
+        
+        .winner-highlight {
+            background: linear-gradient(135deg, #ffd700, #ffed4e) !important;
+            border: 3px solid #f59e0b !important;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3) !important;
+        }
+        
+        .second-place {
+            background: linear-gradient(135deg, #e5e7eb, #f3f4f6) !important;
+            border: 2px solid #9ca3af !important;
+        }
+        
+        .score-input:focus {
+            border-color: #3b82f6;
+            ring-width: 2px;
+            ring-color: rgba(59, 130, 246, 0.2);
+        }
+        
+        .auto-save-indicator {
+            transition: all 0.3s ease;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 180px;
+            margin: 1rem 0;
+        }
+        
+        /* Remove scrollbars for PDF export */
+        .table-container {
+            overflow: visible;
+        }
+        
+        /* Ensure charts are visible in PDF */
+        canvas {
+            max-height: 180px !important;
+        }
+        
+        /* Compact spacing for PDF */
+        .compact-section {
+            margin-bottom: 1rem;
+        }
+        
+        /* Save/Load buttons styling */
+        .action-btn {
+            transition: all 0.2s ease;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-4 max-w-full">
+        <div class="bg-white rounded-lg shadow-lg p-4 compact-section">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex-1">
+                    <h1 class="text-2xl lg:text-3xl font-bold text-gray-800">
+                        <i class="fas fa-trophy text-yellow-500 mr-2"></i>
+                        PB & NI Submission Scoring System
+                    </h1>
+                    <p class="text-gray-600 text-sm mt-1">Monthly evaluation system for Playbook and Notes & Insights submissions</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="bg-blue-100 px-3 py-2 rounded-lg text-center">
+                        <p class="text-xs text-blue-800 font-semibold">Evaluation Month</p>
+                        <input type="month" id="evaluationMonth" class="bg-transparent text-blue-900 font-bold text-sm border-none outline-none w-full">
+                    </div>
+                    <div class="auto-save-indicator bg-green-100 px-2 py-2 rounded-lg hidden" id="autoSaveIndicator">
+                        <i class="fas fa-check text-green-600"></i>
+                        <span class="text-xs text-green-700 ml-1">Saved</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 compact-section no-print">
+            <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                <i class="fas fa-database text-blue-500 mr-2"></i>
+                Data Management
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                <button onclick="saveData()" class="action-btn bg-green-500 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-green-600 flex items-center justify-center">
+                    <i class="fas fa-save mr-1"></i>Save
+                </button>
+                <button onclick="loadData()" class="action-btn bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-600 flex items-center justify-center">
+                    <i class="fas fa-folder-open mr-1"></i>Load
+                </button>
+                <button onclick="exportToJSON()" class="action-btn bg-purple-500 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-purple-600 flex items-center justify-center">
+                    <i class="fas fa-download mr-1"></i>JSON
+                </button>
+                <button onclick="exportToCSV()" class="action-btn bg-indigo-500 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-600 flex items-center justify-center">
+                    <i class="fas fa-file-csv mr-1"></i>CSV
+                </button>
+                <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+                <button onclick="document.getElementById('importFile').click()" class="action-btn bg-orange-500 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-orange-600 flex items-center justify-center">
+                    <i class="fas fa-upload mr-1"></i>Import
+                </button>
+                <button onclick="clearData()" class="action-btn bg-red-500 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-red-600 flex items-center justify-center">
+                    <i class="fas fa-trash mr-1"></i>Clear
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 compact-section">
+            <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                <i class="fas fa-users text-blue-500 mr-2"></i>
+                Evaluator Information
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-green-50 p-3 rounded-md">
+                    <h3 class="font-semibold text-green-800 mb-2">Playbook (PB) Evaluator</h3>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <input type="text" id="pbEvaluatorName" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" placeholder="Enter PB evaluator name">
+                    <label class="block text-sm font-medium text-gray-700 mt-2 mb-1">Position/Title</label>
+                    <input type="text" id="pbEvaluatorTitle" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" placeholder="Enter position">
+                </div>
+                <div class="bg-blue-50 p-3 rounded-md">
+                    <h3 class="font-semibold text-blue-800 mb-2">Notes & Insights (NI) Evaluator</h3>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <input type="text" id="niEvaluatorName" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Enter NI evaluator name">
+                    <label class="block text-sm font-medium text-gray-700 mt-2 mb-1">Position/Title</label>
+                    <input type="text" id="niEvaluatorTitle" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Enter position">
+                </div>
+            </div>
+            <div class="mt-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Evaluation Date</label>
+                <input type="date" id="evaluationDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 compact-section">
+            <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg p-3">
+                <h3 class="font-bold text-sm lg:text-base">Team Zeus</h3>
+                <p class="text-purple-100 text-xs">RM: Awez</p>
+                <div class="mt-2">
+                    <span class="text-xl font-bold" id="zeus-total">0.0</span>
+                    <span class="text-xs text-purple-200 ml-1">avg score</span>
+                </div>
+            </div>
+            <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg p-3">
+                <h3 class="font-bold text-sm lg:text-base">Team Cronos</h3>
+                <p class="text-blue-100 text-xs">RM: Rakesh</p>
+                <div class="mt-2">
+                    <span class="text-xl font-bold" id="cronos-total">0.0</span>
+                    <span class="text-xs text-blue-200 ml-1">avg score</span>
+                </div>
+            </div>
+            <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg p-3">
+                <h3 class="font-bold text-sm lg:text-base">Team Olympus</h3>
+                <p class="text-green-100 text-xs">RM: Shubham</p>
+                <div class="mt-2">
+                    <span class="text-xl font-bold" id="olympus-total">0.0</span>
+                    <span class="text-xs text-green-200 ml-1">avg score</span>
+                </div>
+            </div>
+            <div class="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-lg p-3">
+                <h3 class="font-bold text-sm lg:text-base">Team Phoenix</h3>
+                <p class="text-red-100 text-xs">RM: Rahul</p>
+                <div class="mt-2">
+                    <span class="text-xl font-bold" id="phoenix-total">0.0</span>
+                    <span class="text-xs text-red-200 ml-1">avg score</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 compact-section">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-book text-green-500 mr-2"></i>
+                Playbook (PB) Evaluation
+            </h2>
+            
+            <div class="bg-green-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-green-800 mb-2 text-sm">Scoring Criteria & Weights</h3>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Originality & Creativity</div>
+                        <div class="text-green-600 font-bold">25%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Clarity & Structure</div>
+                        <div class="text-green-600 font-bold">20%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Relevance & Applicability</div>
+                        <div class="text-green-600 font-bold">20%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Out-of-box Thinking</div>
+                        <div class="text-green-600 font-bold">20%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Impact Potential</div>
+                        <div class="text-green-600 font-bold">15%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="border border-gray-300 px-2 py-2 text-left font-semibold text-xs">Team</th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Originality<br><span class="text-xs text-gray-500">(25%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Clarity<br><span class="text-xs text-gray-500">(20%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Relevance<br><span class="text-xs text-gray-500">(20%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Innovation<br><span class="text-xs text-gray-500">(20%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Impact<br><span class="text-xs text-gray-500">(15%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold bg-green-100 text-xs">Total Score</th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Comments</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="pb-zeus-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-purple-50 text-xs">Team Zeus</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="pb" data-criteria="originality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="pb" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="pb" data-criteria="relevance"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="pb" data-criteria="innovation"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="pb" data-criteria="impact"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-green-50 text-sm" id="pb-zeus-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                        <tr id="pb-cronos-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-blue-50 text-xs">Team Cronos</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="pb" data-criteria="originality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="pb" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="pb" data-criteria="relevance"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="pb" data-criteria="innovation"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="pb" data-criteria="impact"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-green-50 text-sm" id="pb-cronos-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                        <tr id="pb-olympus-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-green-50 text-xs">Team Olympus</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="pb" data-criteria="originality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="pb" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="pb" data-criteria="relevance"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="pb" data-criteria="innovation"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="pb" data-criteria="impact"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-green-50 text-sm" id="pb-olympus-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                        <tr id="pb-phoenix-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-red-50 text-xs">Team Phoenix</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="pb" data-criteria="originality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="pb" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="pb" data-criteria="relevance"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="pb" data-criteria="innovation"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="pb" data-criteria="impact"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-green-50 text-sm" id="pb-phoenix-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 compact-section">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-chart-line text-blue-500 mr-2"></i>
+                Notes & Insights (NI) Evaluation
+            </h2>
+            
+            <div class="bg-blue-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-blue-800 mb-2 text-sm">Scoring Criteria & Weights</h3>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Quality & Depth</div>
+                        <div class="text-blue-600 font-bold">25%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Clarity of Insights</div>
+                        <div class="text-blue-600 font-bold">20%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Data & Visualizations</div>
+                        <div class="text-blue-600 font-bold">20%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Relevance of Recommendations</div>
+                        <div class="text-blue-600 font-bold">20%</div>
+                    </div>
+                    <div class="bg-white p-2 rounded-md text-center">
+                        <div class="font-medium text-gray-800">Presentation & Storytelling</div>
+                        <div class="text-blue-600 font-bold">15%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="border border-gray-300 px-2 py-2 text-left font-semibold text-xs">Team</th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Quality & Depth<br><span class="text-xs text-gray-500">(25%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Clarity<br><span class="text-xs text-gray-500">(20%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Data & Viz<br><span class="text-xs text-gray-500">(20%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Recommendations<br><span class="text-xs text-gray-500">(20%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Presentation<br><span class="text-xs text-gray-500">(15%)</span></th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold bg-blue-100 text-xs">Total Score</th>
+                            <th class="border border-gray-300 px-2 py-2 text-center font-semibold text-xs">Comments</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="ni-zeus-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-purple-50 text-xs">Team Zeus</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="ni" data-criteria="quality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="ni" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="ni" data-criteria="data"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="ni" data-criteria="recommendations"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="zeus" data-category="ni" data-criteria="presentation"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-blue-50 text-sm" id="ni-zeus-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                        <tr id="ni-cronos-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-blue-50 text-xs">Team Cronos</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="ni" data-criteria="quality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="ni" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="ni" data-criteria="data"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="ni" data-criteria="recommendations"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="cronos" data-category="ni" data-criteria="presentation"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-blue-50 text-sm" id="ni-cronos-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                        <tr id="ni-olympus-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-green-50 text-xs">Team Olympus</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="ni" data-criteria="quality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="ni" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="ni" data-criteria="data"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="ni" data-criteria="recommendations"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="olympus" data-category="ni" data-criteria="presentation"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-blue-50 text-sm" id="ni-olympus-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                        <tr id="ni-phoenix-row">
+                            <td class="border border-gray-300 px-2 py-2 font-medium bg-red-50 text-xs">Team Phoenix</td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="ni" data-criteria="quality"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="ni" data-criteria="clarity"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="ni" data-criteria="data"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="ni" data-criteria="recommendations"></td>
+                            <td class="border border-gray-300 px-1 py-1"><input type="number" min="0" max="10" step="0.1" class="w-full px-1 py-1 text-center border rounded score-input text-xs" data-team="phoenix" data-category="ni" data-criteria="presentation"></td>
+                            <td class="border border-gray-300 px-2 py-2 text-center font-bold bg-blue-50 text-sm" id="ni-phoenix-total">0.0</td>
+                            <td class="border border-gray-300 px-1 py-1"><textarea class="w-full px-1 py-1 border rounded text-xs" rows="1" placeholder="Comments..."></textarea></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 compact-section">
+            <div class="bg-white rounded-lg shadow-lg p-4">
+                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-medal text-yellow-500 mr-2"></i>
+                    Playbook (PB) Rankings
+                </h3>
+                <div id="pb-rankings" class="space-y-2">
+                    </div>
+                <div class="chart-container">
+                    <canvas id="pbChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-4">
+                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-chart-bar text-blue-500 mr-2"></i>
+                    Notes & Insights (NI) Rankings
+                </h3>
+                <div id="ni-rankings" class="space-y-2">
+                    </div>
+                <div class="chart-container">
+                    <canvas id="niChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 compact-section">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-crown text-amber-500 mr-2"></i>
+                Overall Team Ranking
+            </h2>
+            <div id="overall-rankings" class="space-y-3">
+                </div>
+            <div class="chart-container mt-4">
+                <canvas id="overallChart"></canvas>
+            </div>
+        </div>
+
+        <div class="mt-4 text-right no-print">
+            <button onclick="window.print()" class="bg-gray-700 text-white px-5 py-2 rounded-md shadow-md hover:bg-gray-800 transition-colors duration-200">
+                <i class="fas fa-print mr-2"></i>Print / Export PDF
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const TEAMS = ['zeus', 'cronos', 'olympus', 'phoenix'];
+        const CATEGORIES = {
+            pb: {
+                weights: { originality: 0.25, clarity: 0.20, relevance: 0.20, innovation: 0.20, impact: 0.15 },
+                criteria: ['originality', 'clarity', 'relevance', 'innovation', 'impact']
+            },
+            ni: {
+                weights: { quality: 0.25, clarity: 0.20, data: 0.20, recommendations: 0.20, presentation: 0.15 },
+                criteria: ['quality', 'clarity', 'data', 'recommendations', 'presentation']
+            }
+        };
+
+        let scores = {};
+        let pbChart, niChart, overallChart;
+        let autoSaveTimeout;
+
+        // Initialize scores and load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeScores();
+            loadData(); // Load data from localStorage
+            setupEventListeners();
+            updateAllScoresAndCharts();
+            setTodayDate();
+            setInitialMonth();
+        });
+
+        function initializeScores() {
+            TEAMS.forEach(team => {
+                scores[team] = {
+                    pb: {
+                        originality: 0, clarity: 0, relevance: 0, innovation: 0, impact: 0,
+                        total: 0, comments: ''
+                    },
+                    ni: {
+                        quality: 0, clarity: 0, data: 0, recommendations: 0, presentation: 0,
+                        total: 0, comments: ''
+                    },
+                    overall: 0
+                };
+            });
+        }
+
+        function calculateScore(team, category) {
+            let totalScore = 0;
+            const categoryData = CATEGORIES[category];
+            categoryData.criteria.forEach(criteria => {
+                const inputElement = document.querySelector(`input[data-team="${team}"][data-category="${category}"][data-criteria="${criteria}"]`);
+                const score = parseFloat(inputElement.value) || 0;
+                scores[team][category][criteria] = score;
+                totalScore += score * categoryData.weights[criteria];
+            });
+            scores[team][category].total = parseFloat(totalScore.toFixed(2));
+
+            const commentElement = document.querySelector(`tr[id="${category}-${team}-row"] textarea`);
+            scores[team][category].comments = commentElement ? commentElement.value : '';
+
+            updateUI(team, category);
+            calculateOverallScores(); // Recalculate overall scores after any category score changes
+            autoSave();
+        }
+
+        function updateUI(team, category) {
+            document.getElementById(`${category}-${team}-total`).textContent = scores[team][category].total.toFixed(2);
+        }
+
+        function calculateOverallScores() {
+            const teamOverallScores = [];
+            TEAMS.forEach(team => {
+                const pbTotal = scores[team].pb.total;
+                const niTotal = scores[team].ni.total;
+                // Assuming PB and NI are equally weighted for overall score
+                scores[team].overall = parseFloat(((pbTotal + niTotal) / 2).toFixed(2)); 
+                document.getElementById(`${team}-total`).textContent = scores[team].overall.toFixed(2);
+                teamOverallScores.push({ team: team, score: scores[team].overall });
+            });
+
+            updateRankings('pb', Object.values(scores).map(s => ({ team: s.pb.team, score: s.pb.total })));
+            updateRankings('ni', Object.values(scores).map(s => ({ team: s.ni.team, score: s.ni.total })));
+            
+            // Sort overall scores for ranking
+            teamOverallScores.sort((a, b) => b.score - a.score);
+            updateOverallRankings(teamOverallScores);
+
+            updateCharts();
+        }
+
+        function updateRankings(category, teamScores) {
+            const rankingsDiv = document.getElementById(`${category}-rankings`);
+            rankingsDiv.innerHTML = ''; // Clear previous rankings
+
+            // Sort scores in descending order
+            teamScores.sort((a, b) => b.score - a.score);
+
+            teamScores.forEach((entry, index) => {
+                const rank = index + 1;
+                const rankColor = rank === 1 ? 'text-yellow-600' : rank === 2 ? 'text-gray-500' : 'text-gray-400';
+                const textColor = rank === 1 ? 'font-bold text-yellow-700' : 'text-gray-700';
+
+                const rankingItem = document.createElement('div');
+                rankingItem.className = `flex items-center p-2 rounded-md ${index === 0 ? 'bg-yellow-50' : 'bg-gray-50'}`;
+                rankingItem.innerHTML = `
+                    <span class="font-bold text-lg ${rankColor} mr-2">#${rank}</span>
+                    <span class="flex-1 ${textColor} capitalize">${entry.team}</span>
+                    <span class="font-bold text-lg text-gray-800">${entry.score.toFixed(2)}</span>
+                `;
+                rankingsDiv.appendChild(rankingItem);
+            });
+        }
+
+        function updateOverallRankings(teamOverallScores) {
+            const overallRankingsDiv = document.getElementById('overall-rankings');
+            overallRankingsDiv.innerHTML = ''; // Clear previous rankings
+
+            teamOverallScores.forEach((entry, index) => {
+                const rank = index + 1;
+                const isWinner = rank === 1;
+                const isSecond = rank === 2;
+                
+                const teamRow = document.querySelector(`tr[id*="-${entry.team}-row"]`);
+                if (teamRow) {
+                    // Remove existing highlights
+                    TEAMS.forEach(t => {
+                        const row = document.querySelector(`tr[id*="-${t}-row"]`);
+                        if(row) {
+                            row.classList.remove('winner-highlight', 'second-place');
+                        }
+                    });
+
+                    if (isWinner) {
+                        teamRow.classList.add('winner-highlight');
+                    } else if (isSecond) {
+                        teamRow.classList.add('second-place');
+                    }
+                }
+
+                const rankingItem = document.createElement('div');
+                rankingItem.className = `flex items-center p-3 rounded-lg transition-all duration-300 ${isWinner ? 'winner-highlight' : (isSecond ? 'second-place' : 'bg-gray-100')}`;
+                rankingItem.innerHTML = `
+                    <span class="font-extrabold text-2xl ${isWinner ? 'text-yellow-700' : (isSecond ? 'text-gray-600' : 'text-gray-500')} mr-3">#${rank}</span>
+                    <span class="flex-1 text-lg font-semibold capitalize text-gray-800">${entry.team} ${isWinner ? '<i class="fas fa-trophy text-yellow-500 ml-2 text-2xl"></i>' : ''}</span>
+                    <span class="font-extrabold text-xl ${isWinner ? 'text-yellow-800' : 'text-gray-800'}">${entry.score.toFixed(2)}</span>
+                `;
+                overallRankingsDiv.appendChild(rankingItem);
+            });
+        }
+
+
+        function updateCharts() {
+            const pbData = TEAMS.map(team => scores[team].pb.total);
+            const niData = TEAMS.map(team => scores[team].ni.total);
+            const overallData = TEAMS.map(team => scores[team].overall);
+            const teamLabels = TEAMS.map(team => team.charAt(0).toUpperCase() + team.slice(1));
+
+            // PB Chart
+            if (pbChart) pbChart.destroy();
+            pbChart = new Chart(document.getElementById('pbChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: teamLabels,
+                    datasets: [{
+                        label: 'Playbook Scores',
+                        data: pbData,
+                        backgroundColor: TEAMS.map(team => {
+                            switch(team) {
+                                case 'zeus': return 'rgba(147, 51, 234, 0.6)'; // purple-500
+                                case 'cronos': return 'rgba(59, 130, 246, 0.6)'; // blue-500
+                                case 'olympus': return 'rgba(16, 185, 129, 0.6)'; // green-500
+                                case 'phoenix': return 'rgba(239, 68, 68, 0.6)'; // red-500
+                                default: return 'gray';
+                            }
+                        }),
+                        borderColor: TEAMS.map(team => {
+                            switch(team) {
+                                case 'zeus': return 'rgba(147, 51, 234, 1)';
+                                case 'cronos': return 'rgba(59, 130, 246, 1)';
+                                case 'olympus': return 'rgba(16, 185, 129, 1)';
+                                case 'phoenix': return 'rgba(239, 68, 68, 1)';
+                                default: return 'black';
+                            }
+                        }),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 10,
+                            title: {
+                                display: true,
+                                text: 'Score'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Playbook Scores by Team'
+                        }
+                    }
+                }
+            });
+
+            // NI Chart
+            if (niChart) niChart.destroy();
+            niChart = new Chart(document.getElementById('niChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: teamLabels,
+                    datasets: [{
+                        label: 'Notes & Insights Scores',
+                        data: niData,
+                        backgroundColor: TEAMS.map(team => {
+                            switch(team) {
+                                case 'zeus': return 'rgba(147, 51, 234, 0.6)';
+                                case 'cronos': return 'rgba(59, 130, 246, 0.6)';
+                                case 'olympus': return 'rgba(16, 185, 129, 0.6)';
+                                case 'phoenix': return 'rgba(239, 68, 68, 0.6)';
+                                default: return 'gray';
+                            }
+                        }),
+                        borderColor: TEAMS.map(team => {
+                            switch(team) {
+                                case 'zeus': return 'rgba(147, 51, 234, 1)';
+                                case 'cronos': return 'rgba(59, 130, 246, 1)';
+                                case 'olympus': return 'rgba(16, 185, 129, 1)';
+                                case 'phoenix': return 'rgba(239, 68, 68, 1)';
+                                default: return 'black';
+                            }
+                        }),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 10,
+                            title: {
+                                display: true,
+                                text: 'Score'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Notes & Insights Scores by Team'
+                        }
+                    }
+                }
+            });
+
+            // Overall Chart
+            if (overallChart) overallChart.destroy();
+            overallChart = new Chart(document.getElementById('overallChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: teamLabels,
+                    datasets: [{
+                        label: 'Overall Scores',
+                        data: overallData,
+                        backgroundColor: TEAMS.map(team => {
+                            switch(team) {
+                                case 'zeus': return 'rgba(147, 51, 234, 0.6)';
+                                case 'cronos': return 'rgba(59, 130, 246, 0.6)';
+                                case 'olympus': return 'rgba(16, 185, 129, 0.6)';
+                                case 'phoenix': return 'rgba(239, 68, 68, 0.6)';
+                                default: return 'gray';
+                            }
+                        }),
+                        borderColor: TEAMS.map(team => {
+                            switch(team) {
+                                case 'zeus': return 'rgba(147, 51, 234, 1)';
+                                case 'cronos': return 'rgba(59, 130, 246, 1)';
+                                case 'olympus': return 'rgba(16, 185, 129, 1)';
+                                case 'phoenix': return 'rgba(239, 68, 68, 1)';
+                                default: return 'black';
+                            }
+                        }),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 10,
+                            title: {
+                                display: true,
+                                text: 'Score'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Overall Scores by Team'
+                        }
+                    }
+                }
+            });
+        }
+
+        function setupEventListeners() {
+            document.querySelectorAll('.score-input').forEach(input => {
+                input.addEventListener('input', (event) => {
+                    const team = event.target.dataset.team;
+                    const category = event.target.dataset.category;
+                    calculateScore(team, category);
+                });
+            });
+
+            document.querySelectorAll('textarea').forEach(textarea => {
+                textarea.addEventListener('input', (event) => {
+                    const rowId = event.target.closest('tr').id;
+                    const [category, team] = rowId.split('-');
+                    scores[team][category].comments = event.target.value;
+                    autoSave();
+                });
+            });
+
+            document.getElementById('pbEvaluatorName').addEventListener('input', autoSave);
+            document.getElementById('pbEvaluatorTitle').addEventListener('input', autoSave);
+            document.getElementById('niEvaluatorName').addEventListener('input', autoSave);
+            document.getElementById('niEvaluatorTitle').addEventListener('input', autoSave);
+            document.getElementById('evaluationDate').addEventListener('change', autoSave);
+            document.getElementById('evaluationMonth').addEventListener('change', autoSave);
+        }
+
+        function autoSave() {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                saveData();
+                const indicator = document.getElementById('autoSaveIndicator');
+                indicator.classList.remove('hidden');
+                setTimeout(() => indicator.classList.add('hidden'), 2000);
+            }, 1000); // Save 1 second after last input
+        }
+
+        function saveData() {
+            const data = {
+                scores: scores,
+                evaluator: {
+                    pbName: document.getElementById('pbEvaluatorName').value,
+                    pbTitle: document.getElementById('pbEvaluatorTitle').value,
+                    niName: document.getElementById('niEvaluatorName').value,
+                    niTitle: document.getElementById('niEvaluatorTitle').value,
+                    date: document.getElementById('evaluationDate').value,
+                    month: document.getElementById('evaluationMonth').value
+                }
+            };
+            localStorage.setItem('pbNiScoringData', JSON.stringify(data));
+            console.log('Data saved to localStorage.');
+        }
+
+        function loadData() {
+            const savedData = localStorage.getItem('pbNiScoringData');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                scores = data.scores;
+
+                // Populate evaluator info
+                document.getElementById('pbEvaluatorName').value = data.evaluator.pbName || '';
+                document.getElementById('pbEvaluatorTitle').value = data.evaluator.pbTitle || '';
+                document.getElementById('niEvaluatorName').value = data.evaluator.niName || '';
+                document.getElementById('niEvaluatorTitle').value = data.evaluator.niTitle || '';
+                document.getElementById('evaluationDate').value = data.evaluator.date || '';
+                document.getElementById('evaluationMonth').value = data.evaluator.month || '';
+
+
+                TEAMS.forEach(team => {
+                    CATEGORIES.pb.criteria.forEach(criteria => {
+                        const inputElement = document.querySelector(`input[data-team="${team}"][data-category="pb"][data-criteria="${criteria}"]`);
+                        if (inputElement && scores[team] && scores[team].pb) {
+                            inputElement.value = scores[team].pb[criteria] || 0;
+                        }
+                    });
+                    const pbCommentElement = document.querySelector(`tr[id="pb-${team}-row"] textarea`);
+                    if (pbCommentElement && scores[team] && scores[team].pb) {
+                        pbCommentElement.value = scores[team].pb.comments || '';
+                    }
+
+                    CATEGORIES.ni.criteria.forEach(criteria => {
+                        const inputElement = document.querySelector(`input[data-team="${team}"][data-category="ni"][data-criteria="${criteria}"]`);
+                        if (inputElement && scores[team] && scores[team].ni) {
+                            inputElement.value = scores[team].ni[criteria] || 0;
+                        }
+                    });
+                    const niCommentElement = document.querySelector(`tr[id="ni-${team}-row"] textarea`);
+                    if (niCommentElement && scores[team] && scores[team].ni) {
+                        niCommentElement.value = scores[team].ni.comments || '';
+                    }
+                });
+                updateAllScoresAndCharts();
+                console.log('Data loaded from localStorage.');
+            } else {
+                console.log('No saved data found.');
+                // If no data found, just update charts with initial zeros
+                updateAllScoresAndCharts();
+            }
+        }
+
+        function updateAllScoresAndCharts() {
+            TEAMS.forEach(team => {
+                calculateScore(team, 'pb');
+                calculateScore(team, 'ni');
+            });
+            calculateOverallScores(); // This will also update rankings and charts
+        }
+
+        function clearData() {
+            if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                localStorage.removeItem('pbNiScoringData');
+                initializeScores(); // Reset scores in memory
+                // Clear all input fields and textareas
+                document.querySelectorAll('.score-input').forEach(input => input.value = '');
+                document.querySelectorAll('textarea').forEach(textarea => textarea.value = '');
+                document.getElementById('pbEvaluatorName').value = '';
+                document.getElementById('pbEvaluatorTitle').value = '';
+                document.getElementById('niEvaluatorName').value = '';
+                document.getElementById('niEvaluatorTitle').value = '';
+                document.getElementById('evaluationDate').value = '';
+                setInitialMonth(); // Reset month to current
+                updateAllScoresAndCharts(); // Update UI with cleared data
+                console.log('All data cleared.');
+            }
+        }
+
+        function exportToJSON() {
+            const data = {
+                scores: scores,
+                evaluator: {
+                    pbName: document.getElementById('pbEvaluatorName').value,
+                    pbTitle: document.getElementById('pbEvaluatorTitle').value,
+                    niName: document.getElementById('niEvaluatorName').value,
+                    niTitle: document.getElementById('niEvaluatorTitle').value,
+                    date: document.getElementById('evaluationDate').value,
+                    month: document.getElementById('evaluationMonth').value
+                }
+            };
+            const jsonString = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const month = document.getElementById('evaluationMonth').value.replace('-', '_');
+            a.download = `scoring_data_${month}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportToCSV() {
+            let csv = '';
+            const month = document.getElementById('evaluationMonth').value;
+
+            // Evaluator Information
+            csv += `"Evaluation Month","${month}"\n`;
+            csv += `"PB Evaluator Name","${document.getElementById('pbEvaluatorName').value}"\n`;
+            csv += `"PB Evaluator Title","${document.getElementById('pbEvaluatorTitle').value}"\n`;
+            csv += `"NI Evaluator Name","${document.getElementById('niEvaluatorName').value}"\n`;
+            csv += `"NI Evaluator Title","${document.getElementById('niEvaluatorTitle').value}"\n`;
+            csv += `"Evaluation Date","${document.getElementById('evaluationDate').value}"\n\n`;
+
+            // PB Scores
+            csv += 'Playbook (PB) Evaluation\n';
+            let pbHeaders = ['Team'];
+            CATEGORIES.pb.criteria.forEach(c => pbHeaders.push(c.replace(/([A-Z])/g, ' $1').trim() + ' (Score)'));
+            pbHeaders.push('Total Score', 'Comments');
+            csv += `"${pbHeaders.join('","')}"\n`;
+
+            TEAMS.forEach(team => {
+                let row = [`Team ${team.charAt(0).toUpperCase() + team.slice(1)}`];
+                CATEGORIES.pb.criteria.forEach(c => row.push(scores[team].pb[c]));
+                row.push(scores[team].pb.total.toFixed(2));
+                row.push(`"${scores[team].pb.comments.replace(/"/g, '""')}"`); // Handle commas and quotes in comments
+                csv += `"${row.join('","')}"\n`;
+            });
+            csv += '\n';
+
+            // NI Scores
+            csv += 'Notes & Insights (NI) Evaluation\n';
+            let niHeaders = ['Team'];
+            CATEGORIES.ni.criteria.forEach(c => niHeaders.push(c.replace(/([A-Z])/g, ' $1').trim() + ' (Score)'));
+            niHeaders.push('Total Score', 'Comments');
+            csv += `"${niHeaders.join('","')}"\n`;
+
+            TEAMS.forEach(team => {
+                let row = [`Team ${team.charAt(0).toUpperCase() + team.slice(1)}`];
+                CATEGORIES.ni.criteria.forEach(c => row.push(scores[team].ni[c]));
+                row.push(scores[team].ni.total.toFixed(2));
+                row.push(`"${scores[team].ni.comments.replace(/"/g, '""')}"`); // Handle commas and quotes in comments
+                csv += `"${row.join('","')}"\n`;
+            });
+            csv += '\n';
+
+            // Overall Scores
+            csv += 'Overall Scores\n';
+            csv += '"Team","Overall Score"\n';
+            const sortedOverall = Object.entries(scores)
+                                    .map(([team, data]) => ({ team: team, score: data.overall }))
+                                    .sort((a, b) => b.score - a.score);
+            sortedOverall.forEach(entry => {
+                csv += `"${entry.team.charAt(0).toUpperCase() + entry.team.slice(1)}","${entry.score.toFixed(2)}"\n`;
+            });
+
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `scoring_data_${month}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (importedData.scores && importedData.evaluator) {
+                        scores = importedData.scores;
+                        document.getElementById('pbEvaluatorName').value = importedData.evaluator.pbName || '';
+                        document.getElementById('pbEvaluatorTitle').value = importedData.evaluator.pbTitle || '';
+                        document.getElementById('niEvaluatorName').value = importedData.evaluator.niName || '';
+                        document.getElementById('niEvaluatorTitle').value = importedData.evaluator.niTitle || '';
+                        document.getElementById('evaluationDate').value = importedData.evaluator.date || '';
+                        document.getElementById('evaluationMonth').value = importedData.evaluator.month || '';
+
+                        TEAMS.forEach(team => {
+                            CATEGORIES.pb.criteria.forEach(criteria => {
+                                const inputElement = document.querySelector(`input[data-team="${team}"][data-category="pb"][data-criteria="${criteria}"]`);
+                                if (inputElement && scores[team] && scores[team].pb) {
+                                    inputElement.value = scores[team].pb[criteria] || 0;
+                                }
+                            });
+                            const pbCommentElement = document.querySelector(`tr[id="pb-${team}-row"] textarea`);
+                            if (pbCommentElement && scores[team] && scores[team].pb) {
+                                pbCommentElement.value = scores[team].pb.comments || '';
+                            }
+
+                            CATEGORIES.ni.criteria.forEach(criteria => {
+                                const inputElement = document.querySelector(`input[data-team="${team}"][data-category="ni"][data-criteria="${criteria}"]`);
+                                if (inputElement && scores[team] && scores[team].ni) {
+                                    inputElement.value = scores[team].ni[criteria] || 0;
+                                }
+                            });
+                            const niCommentElement = document.querySelector(`tr[id="ni-${team}-row"] textarea`);
+                            if (niCommentElement && scores[team] && scores[team].ni) {
+                                niCommentElement.value = scores[team].ni.comments || '';
+                            }
+                        });
+                        updateAllScoresAndCharts();
+                        alert('Data imported successfully!');
+                        autoSave();
+                    } else {
+                        alert('Invalid JSON file format. Please ensure it contains "scores" and "evaluator" objects.');
+                    }
+                } catch (e) {
+                    alert('Error parsing JSON file. Please ensure it is a valid JSON.');
+                    console.error('Error importing data:', e);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function setTodayDate() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('evaluationDate').value = `${yyyy}-${mm}-${dd}`;
+        }
+
+        function setInitialMonth() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            document.getElementById('evaluationMonth').value = `${yyyy}-${mm}`;
+        }
+
+    </script>
+</body>
+</html>
